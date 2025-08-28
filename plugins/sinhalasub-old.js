@@ -18,7 +18,7 @@ async (conn, mek, m, { from, reply, args }) => {
             return reply("📽️ Please provide the name of the movie.\nExample: .movie Iron Man");
         }
 
-        const apiUrl = `https://apis.davidcyriltech.my.id/imdb?query=${encodeURIComponent(movieName)}`;
+        const apiUrl = `https://supun-md-api-xmjh.vercel.app/api/zoom-search?q=${encodeURIComponent(movieName)}`;
         const response = await axios.get(apiUrl);
 
         if (!response.data.status || !response.data.results || response.data.results.length === 0) {
@@ -58,7 +58,7 @@ cmd({
             const movie = movies[n - 1];
             if (!movie) continue;
 
-            const infoUrl = `https://apis.davidcyriltech.my.id/imdb?query=${encodeURIComponent(movie.title)}`;
+            const infoUrl = `https://supun-md-api-xmjh.vercel.app/api/zoom-dl?url=${encodeURIComponent(movie.title)}`;
             const infoRes = await axios.get(infoUrl);
             const mv = infoRes.data.movie;
 
