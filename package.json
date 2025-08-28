@@ -57,6 +57,8 @@
     "webtorrent": "2.6.10",
     "nodejs-file-downloader": "^4.9.4",
     "sinhalasub.lk": "^10.0.0",
-    "pixeldrainjs": "^0.3.8"
+    "pixeldrainjs": "^0.3.8",
+    "pixaldrain-sinhalasub": "^1.0.0",
+    "@sl-code-lords/movie-api": "1.0.0"
   }
 }
