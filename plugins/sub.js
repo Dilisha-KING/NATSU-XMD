@@ -26,20 +26,6 @@ cmd({
             return reply(`කණගාටුයි, *${movieName}* සෙවුමෙන් result එකක් නොලැබුණා.`);
         }
 
-        // Take top 3 results
-        const movies = searchRes.data.slice(0, 3);
-
-        let message = `🎬 *Search results for:* ${movieName}\n\n`;
-
-        for (let i = 0; i < movies.length; i++) {
-            const movie = movies[i];
-
-            // ===== Safe check for undefined movie =====
-            if (!movie || !movie.url) {
-                message += `${i + 1}. ❌ Invalid movie data.\n\n`;
-                continue;
-            }
-
             const movieURL = movie.url;
             message += `*${i + 1}. ${movie.title}* (${movie.year})\n`;
             console.log(`🔗 Selected movie URL: ${movieURL}`);
