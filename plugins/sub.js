@@ -3,7 +3,7 @@ const axios = require('axios');
 
 cmd({
     pattern: 'zoom',
-    desc: 'Search Zoom.lk movies and get download links + subtitles (debug version)',
+    desc: 'Search Zoom.lk movies and get top 3 download links + subtitles (safe version)',
     category: 'movie',
     react: '🎬',
     filename: __filename
@@ -26,36 +26,53 @@ cmd({
             return reply(`කණගාටුයි, *${movieName}* සෙවුමෙන් result එකක් නොලැබුණා.`);
         }
 
-        // Take top 1 result
-        const movie = searchRes.data[0];
-        const movieURL = movie.url; // exact Zoom.lk URL from search API
+        // Take top 3 results
+        const movies = searchRes.data.slice(0, 3);
 
-        console.log(`🔗 Selected movie URL: ${movieURL}`);
+        let message = `🎬 *Search results for:* ${movieName}\n\n`;
 
-        // ===== Download API =====
-        const downloadApiUrl = `https://supun-md-api-xmjh.vercel.app/api/zoom-dl?url=${encodeURIComponent(movieURL)}`;
-        console.log(`⬇️ Download API URL: ${downloadApiUrl}`);
+        for (let i = 0; i < movies.length; i++) {
+            const movie = movies[i];
 
-        const downloadRes = await axios.get(downloadApiUrl);
-        console.log('📝 Download API Response:', downloadRes.data);
+            // ===== Safe check for undefined movie =====
+            if (!movie || !movie.url) {
+                message += `${i + 1}. ❌ Invalid movie data.\n\n`;
+                continue;
+            }
 
-        if (!downloadRes.data || !downloadRes.data.downloadLinks || downloadRes.data.downloadLinks.length === 0) {
-            return reply(`කණගාටුයි, *${movie.title}* download links ලබාගත නොහැක.`);
-        }
+            const movieURL = movie.url;
+            message += `*${i + 1}. ${movie.title}* (${movie.year})\n`;
+            console.log(`🔗 Selected movie URL: ${movieURL}`);
 
-        let message = `🎬 *${movie.title}* (${movie.year})\n\n`;
+            // ===== Download API =====
+            const downloadApiUrl = `https://supun-md-api-xmjh.vercel.app/api/zoom-dl?url=${encodeURIComponent(movieURL)}`;
+            console.log(`⬇️ Download API URL: ${downloadApiUrl}`);
 
-        // Download links
-        downloadRes.data.downloadLinks.forEach((link, index) => {
-            message += `${index + 1}. ${link.quality} - ${link.size}\n${link.url}\n`;
-        });
+            try {
+                const downloadRes = await axios.get(downloadApiUrl);
+                console.log('📝 Download API Response:', downloadRes.data);
 
-        // Subtitles
-        if (downloadRes.data.subtitles && downloadRes.data.subtitles.length > 0) {
-            message += `\n💬 *Subtitles:*\n`;
-            downloadRes.data.subtitles.forEach((sub, i) => {
-                message += `${i + 1}. ${sub.language} - ${sub.url}\n`;
-            });
+                if (downloadRes.data && downloadRes.data.downloadLinks && downloadRes.data.downloadLinks.length > 0) {
+                    downloadRes.data.downloadLinks.forEach((link, index) => {
+                        message += `${index + 1}. ${link.quality} - ${link.size}\n${link.url}\n`;
+                    });
+                } else {
+                    message += '❌ Download links not available.\n';
+                }
+
+                if (downloadRes.data && downloadRes.data.subtitles && downloadRes.data.subtitles.length > 0) {
+                    message += `💬 Subtitles:\n`;
+                    downloadRes.data.subtitles.forEach((sub, j) => {
+                        message += `${j + 1}. ${sub.language} - ${sub.url}\n`;
+                    });
+                }
+
+            } catch (err) {
+                console.error(err);
+                message += '❌ Error fetching download links.\n';
+            }
+
+            message += '\n';
         }
 
         reply(message);
