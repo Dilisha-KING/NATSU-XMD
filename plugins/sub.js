@@ -2,8 +2,8 @@ const { cmd } = require('../command');
 const axios = require('axios');
 
 cmd({
-    pattern: 'zoommovie',
-    desc: 'Search Zoom.lk movies and get download links + subtitles',
+    pattern: 'zoom',
+    desc: 'Search Zoom.lk movies and get download links + subtitles (debug version)',
     category: 'movie',
     react: '🎬',
     filename: __filename
@@ -17,25 +17,32 @@ cmd({
 
         // ===== Search API =====
         const searchApiUrl = `https://supun-md-api-xmjh.vercel.app/api/zoom-search?q=${encodeURIComponent(movieName)}`;
+        console.log(`🔎 Searching movie: ${movieName}`);
         const searchRes = await axios.get(searchApiUrl);
+
+        console.log('📝 Search API Response:', searchRes.data);
 
         if (!searchRes.data || searchRes.data.length === 0) {
             return reply(`කණගාටුයි, *${movieName}* සෙවුමෙන් result එකක් නොලැබුණා.`);
         }
 
-        // Take the first search result
+        // Take top 1 result
         const movie = searchRes.data[0];
-        const movieURL = movie.url; // Zoom.lk movie URL from search API
+        const movieURL = movie.url; // exact Zoom.lk URL from search API
+
+        console.log(`🔗 Selected movie URL: ${movieURL}`);
 
         // ===== Download API =====
         const downloadApiUrl = `https://supun-md-api-xmjh.vercel.app/api/zoom-dl?url=${encodeURIComponent(movieURL)}`;
+        console.log(`⬇️ Download API URL: ${downloadApiUrl}`);
+
         const downloadRes = await axios.get(downloadApiUrl);
+        console.log('📝 Download API Response:', downloadRes.data);
 
         if (!downloadRes.data || !downloadRes.data.downloadLinks || downloadRes.data.downloadLinks.length === 0) {
             return reply(`කණගාටුයි, *${movie.title}* download links ලබාගත නොහැක.`);
         }
 
-        // Prepare message
         let message = `🎬 *${movie.title}* (${movie.year})\n\n`;
 
         // Download links
@@ -54,7 +61,7 @@ cmd({
         reply(message);
 
     } catch (err) {
-        console.error(err);
-        reply('කණගාටුයි, movie details fetch / download links ලබාගන්න බැරි වුණා 😔');
+        console.error('❌ Plugin Error:', err);
+        reply('කණගාටුයි, movie search / download fetch කරන්න බැරි වුණා 😔');
     }
 });
