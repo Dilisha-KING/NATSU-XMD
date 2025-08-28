@@ -55,6 +55,8 @@
     "mrnima-moviedl": "1.0.0",
     "torrent-search-api": "latest",
     "webtorrent": "2.6.10",
-    "nodejs-file-downloader": "^4.9.4"
+    "nodejs-file-downloader": "^4.9.4",
+    "sinhalasub.lk": "^10.0.0",
+    "pixeldrainjs": "^0.3.8"
   }
 }
