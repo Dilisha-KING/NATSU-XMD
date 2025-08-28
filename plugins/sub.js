@@ -42,17 +42,19 @@ cmd({
         detailText += '> *© Powered By 🧚‍♂️SUHAS-MD V8*';
 
         // Send movie details
-        const sentMsg = await conn.sendMessage(from, {
+        await conn.sendMessage(from, {
             image: { url: details.image || 'https://i.ibb.co/02FQtBf/20241118-143715.jpg' },
             caption: detailText,
             contextInfo: { forwardingScore: 999, isForwarded: true }
         }, { quoted: mek });
 
-        // Listen for quality selection
+        // Listen for number reply from same user (no quote required)
         const handleDownloadReply = async (update) => {
             const replyMsg = update.messages[0];
             if (!replyMsg.message?.extendedTextMessage) return;
-            if (replyMsg.message.contextInfo?.stanzaId !== sentMsg.key.id) return;
+
+            const senderId = replyMsg.key.participant || replyMsg.key.remoteJid;
+            if (senderId !== mek.sender) return; // Only respond to command sender
 
             const selectedOption = replyMsg.message.extendedTextMessage.text.trim();
             let quality;
