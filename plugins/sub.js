@@ -1,97 +1,62 @@
 const { cmd } = require('../command');
-const { getDetails, getDownload } = require('sinhalasub.lk');
+const axios = require('axios');
 
 cmd({
-    pattern: 'sinhalasub',
-    desc: 'Search for a movie and get details & download options from sinhalasub.lk',
+    pattern: 'zoommovie',
+    desc: 'Get multiple Zoom.lk movies download links with Sinhala subtitles',
     category: 'movie',
     react: '🎬',
     filename: __filename
-}, async (conn, mek, m, { from, q, reply }) => {
+}, async (conn, mek, m, { from, reply, args }) => {
     try {
-        const query = q?.trim();
-        if (!query) return reply('❗ Please provide a movie or TV show name to search.');
-
-        // Get movie details
-        let searchResults;
-        try {
-            searchResults = await getDetails(query);
-        } catch (err) {
-            console.error('getDetails Error:', err);
-            return reply('❗ Failed to fetch movie details.');
+        if (!args || args.length === 0) {
+            return reply('ඔයා Zoom.lk movie URL එක/URL ලැයිස්තුවක් දාන්න ඕනේ!\nUsage: zoommovie <url1> [url2] [url3] ...');
         }
 
-        if (!searchResults || !searchResults.status || !searchResults.result) {
-            return reply('❗ No results found.');
-        }
+        const movieURLs = args; // Array of URLs
 
-        const details = searchResults.result;
+        let message = `🎬 *Zoom.lk Movie Links*\n\n`;
 
-        // Build movie details message
-        let detailText = `*${details.title || 'Unknown'}*\n`;
-        detailText += `📅 Release Date: ${details.year || 'N/A'}\n`;
-        detailText += `🌎 Country: ${details.country || 'N/A'}\n`;
-        detailText += `🎰 Duration: ${details.duration || 'N/A'}\n`;
-        const genres = Array.isArray(details.category) ? details.category.join(', ') : details.category || 'N/A';
-        detailText += `🧚‍♂️ Genres: ${genres}\n`;
-        detailText += `⭐ IMDb Rating: ${details.rating || 'N/A'}\n\n`;
-        detailText += '🔢 REPLY THE NUMBER YOU WANT\n\n';
-        detailText += '*1. ➠ SD 480p*\n';
-        detailText += '*2. ➠ HD 720p*\n';
-        detailText += '*3. ➠ HHD 1080p*\n\n';
-        detailText += '> *© Powered By 🧚‍♂️SUHAS-MD V8*';
+        for (let i = 0; i < movieURLs.length; i++) {
+            const movieURL = movieURLs[i];
+            message += `🔗 Movie ${i + 1}: ${movieURL}\n`;
 
-        // Send movie details
-        await conn.sendMessage(from, {
-            image: { url: details.image || 'https://i.ibb.co/02FQtBf/20241118-143715.jpg' },
-            caption: detailText,
-            contextInfo: { forwardingScore: 999, isForwarded: true }
-        }, { quoted: mek });
-
-        // Listen for number reply from same user (no quote required)
-        const handleDownloadReply = async (update) => {
-            const replyMsg = update.messages[0];
-            if (!replyMsg.message?.extendedTextMessage) return;
-
-            const senderId = replyMsg.key.participant || replyMsg.key.remoteJid;
-            if (senderId !== mek.sender) return; // Only respond to command sender
-
-            const selectedOption = replyMsg.message.extendedTextMessage.text.trim();
-            let quality;
-            switch (selectedOption) {
-                case '1': quality = 'SD 480p'; break;
-                case '2': quality = 'HD 720p'; break;
-                case '3': quality = 'HHD 1080p'; break;
-                default:
-                    await conn.sendMessage(from, { react: { text: '❌', key: mek.key } });
-                    return reply('❗ Invalid option. Please select 1, 2, or 3.');
-            }
+            // Supun MD API call
+            const apiUrl = `https://supun-md-api-xmjh.vercel.app/api/zoom-dl?url=${encodeURIComponent(movieURL)}`;
 
             try {
-                const fileUrl = await getDownload(details.link, quality);
-                if (fileUrl) {
-                    await conn.sendMessage(from, {
-                        document: { url: fileUrl, mimetype: 'video/mp4', fileName: (details.title || 'Movie') + '.mp4' },
-                        caption: `${details.title || 'Movie'}\n\n> *© Powered By 🧚‍♂️SUHAS-MD V8*`
-                    }, { quoted: mek });
-                    await conn.sendMessage(from, { react: { text: '✅', key: mek.key } });
-                } else {
-                    await conn.sendMessage(from, { react: { text: '❌', key: mek.key } });
-                    reply('❗ Download link not found for the selected quality.');
-                }
-            } catch (err) {
-                console.error('Download Error:', err);
-                await conn.sendMessage(from, { react: { text: '❌', key: mek.key } });
-                reply('❗ An error occurred while processing your download request.');
-            }
-        };
+                const res = await axios.get(apiUrl);
 
-        conn.ev.on('messages.upsert', handleDownloadReply);
-        setTimeout(() => conn.ev.off('messages.upsert', handleDownloadReply), 60000);
+                if (!res.data || !res.data.downloadLinks || res.data.downloadLinks.length === 0) {
+                    message += '❌ Download links not found.\n\n';
+                    continue;
+                }
+
+                // Download links
+                res.data.downloadLinks.forEach((link, index) => {
+                    message += `${index + 1}. ${link.quality} - ${link.size}\n${link.url}\n`;
+                });
+
+                // Subtitles
+                if (res.data.subtitles && res.data.subtitles.length > 0) {
+                    message += `💬 Subtitles:\n`;
+                    res.data.subtitles.forEach((sub, i) => {
+                        message += `${i + 1}. ${sub.language} - ${sub.url}\n`;
+                    });
+                }
+
+                message += `\n`;
+
+            } catch (err) {
+                console.error(err);
+                message += '❌ Error fetching this movie.\n\n';
+            }
+        }
+
+        reply(message);
 
     } catch (err) {
-        console.error('Plugin Error:', err);
-        await conn.sendMessage(from, { react: { text: '❌', key: mek.key } });
-        reply('❗ Error: ' + (err.message || err));
+        console.error(err);
+        reply('කණගාටුයි, movies fetch කරන්න බැරි වුණා 😔');
     }
 });
