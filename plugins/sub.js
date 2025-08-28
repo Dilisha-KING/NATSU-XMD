@@ -1,9 +1,6 @@
 const { cmd } = require('../command');
-const { get_list, movie } = require('sinhalasub.lk');
-const { Pixeldrain } = require('pixeldrainjs');
-const axios = require('axios');
-
-const pixeldrainClient = new Pixeldrain(''); // Pixeldrain API key (if required)
+const { SinhalaSub } = require('@sl-code-lords/movie-api');
+const { PixaldrainDL } = require('pixaldrain-sinhalasub');
 
 cmd({
     pattern: 'sinhalasub',
@@ -11,73 +8,117 @@ cmd({
     category: 'movie',
     react: '💕',
     filename: __filename
-}, async (conn, mek, m, { from, args, reply }) => {
+}, async (conn, mek, m, { from, q, reply }) => {
     try {
-        const query = args.join(' ').trim();
+        const query = q.trim();
         if (!query) return reply('Please provide a movie or TV show name to search.');
 
-        const searchResults = await get_list.by_search(query);
+        const searchResults = await SinhalaSub.get_list.by_search(query);
 
-        if (!searchResults.status || searchResults.results.length === 0)
+        if (!searchResults.status || searchResults.results.length === 0) 
             return reply('No results found.');
 
+        // Build search result message
         let messageText = '*🧚‍♂️SUHAS-MD Search Results:*\n\n';
         searchResults.results.forEach((item, index) => {
             messageText += `${index + 1}. ${item.title}\nType: ${item.type}\nLink: ${item.link}\n\n`;
         });
 
-        await conn.sendMessage(from, { text: messageText }, { quoted: mek });
+        const sentMsg = await conn.sendMessage(from, {
+            image: { url: 'https://i.ibb.co/02FQtBf/20241118-143715.jpg' },
+            caption: messageText,
+            contextInfo: { forwardingScore: 999, isForwarded: true }
+        }, { quoted: mek });
 
-        // Wait for user reply (number)
-        conn.ev.once('messages.upsert', async (update) => {
+        // Listen for number reply
+        const handleNumberReply = async (update) => {
             const msg = update.messages[0];
             if (!msg.message || !msg.message.extendedTextMessage) return;
 
-            const num = parseInt(msg.message.extendedTextMessage.text.trim()) - 1;
-            if (num < 0 || num >= searchResults.results.length)
-                return reply('❗ Invalid selection.');
+            const numberText = msg.message.extendedTextMessage.text.trim();
+            const selectedIndex = parseInt(numberText) - 1;
 
-            const selectedMovie = searchResults.results[num];
-            const detailsRes = await movie(selectedMovie.link);
-            const details = detailsRes.details;
+            if (selectedIndex < 0 || selectedIndex >= searchResults.results.length) {
+                await conn.sendMessage(from, { react: { text: '❌', key: mek.key } });
+                return reply('❗ Invalid selection. Please choose a valid number from the search results.');
+            }
 
-            let detailText = `*${details.title}*\n📅 Release Date: ${details.release_date}\n🌎 Country: ${details.country}\n🎰 Duration: ${details.duration}\n🧚‍♂️ Genres: ${details.genres.join(', ')}\n⭐ IMDb Rating: ${details.IMDb_Rating}\n🧚‍♂️ Director: ${details.director.join(', ')}\n\n`;
-            detailText += '*Reply the number for quality:*\n1. SD 480p\n2. HD 720p\n3. FHD 1080p';
+            const selectedMovie = searchResults.results[selectedIndex];
+            const movieDetails = await SinhalaSub.movie(selectedMovie.link);
 
-            await conn.sendMessage(from, { text: detailText }, { quoted: mek });
+            if (!movieDetails || !movieDetails.details || !movieDetails.downloads) 
+                return reply('❗ Movie details not found.');
 
-            // Wait for quality selection
-            conn.ev.once('messages.upsert', async (upd) => {
-                const selMsg = upd.messages[0];
-                if (!selMsg.message || !selMsg.message.extendedTextMessage) return;
+            const details = movieDetails.details;
+            let detailText = `*${details.title}*\n`;
+            detailText += `📅 Release Date: ${details.release_date}\n`;
+            detailText += `🌎 Country: ${details.country}\n`;
+            detailText += `🎰 Duration: ${details.duration}\n`;
+            const genres = Array.isArray(details.genres) ? details.genres.join(', ') : details.genres;
+            detailText += `🧚‍♂️ Genres: ${genres}\n`;
+            detailText += `⭐ IMDb Rating: ${details.IMDb_Rating}\n`;
+            detailText += `🧚‍♂️ Director: ${details.director.join(', ')}\n\n`;
+            detailText += '🔢 REPLY THE NUMBER YOU WANT\n\n';
+            detailText += '*1. ➠ SD 480p*\n';
+            detailText += '*2. ➠ HD 720p*\n';
+            detailText += '*3. ➠ HHD 1080p*\n\n';
+            detailText += '> *© Powered By 🧚‍♂️SUHAS-MD V8*';
 
-                const opt = selMsg.message.extendedTextMessage.text.trim();
+            const poster = details.images && details.images.length > 0 ? details.images[0] : null;
+
+            const downloadMsg = await conn.sendMessage(from, {
+                image: { url: poster },
+                caption: detailText,
+                contextInfo: { forwardingScore: 999, isForwarded: true }
+            }, { quoted: mek });
+
+            // Listen for download option reply
+            const handleDownloadReply = async (update) => {
+                const replyMsg = update.messages[0];
+                if (!replyMsg.message || !replyMsg.message.extendedTextMessage) return;
+                const selectedOption = replyMsg.message.extendedTextMessage.text.trim();
+
+                if (replyMsg.message.contextInfo.stanzaId !== downloadMsg.key.id) return;
+
                 let quality;
-                switch (opt) {
-                    case '1': quality = '480p'; break;
-                    case '2': quality = '720p'; break;
-                    case '3': quality = '1080p'; break;
-                    default: return reply('❗ Invalid option.');
+                switch (selectedOption) {
+                    case '1': quality = 'SD 480p'; break;
+                    case '2': quality = 'HD 720p'; break;
+                    case '3': quality = 'HHD 1080p'; break;
+                    default:
+                        await conn.sendMessage(from, { react: { text: '❌', key: mek.key } });
+                        return reply('❗ Invalid option. Please select from 1, 2, or 3.');
                 }
 
                 try {
-                    const fileLink = details.downloads[quality]; // Assuming details.downloads has quality links
-                    if (!fileLink) return reply('❗ Download link not found.');
-
-                    await conn.sendMessage(from, {
-                        document: { url: fileLink, mimetype: 'video/mp4', fileName: `${details.title}.mp4` }
-                    }, { quoted: mek });
-
-                    reply('✅ Download ready!');
+                    const fileUrl = await PixaldrainDL(selectedMovie.link, quality, 'video/mp4');
+                    if (fileUrl) {
+                        await conn.sendMessage(from, {
+                            document: { url: fileUrl, mimetype: 'video/mp4', fileName: details.title + '.mp4' },
+                            caption: details.title + '\n\n> *© Powered By 🧚‍♂️SUHAS-MD V8*'
+                        }, { quoted: mek });
+                        await conn.sendMessage(from, { react: { text: '✅', key: mek.key } });
+                    } else {
+                        await conn.sendMessage(from, { react: { text: '❌', key: mek.key } });
+                        reply('❗ Download link not found. Please try another quality.');
+                    }
                 } catch (err) {
-                    console.error(err);
-                    reply('❗ Error downloading file.');
+                    console.log('Error in PixaldrainDL function:', err);
+                    await conn.sendMessage(from, { react: { text: '❌', key: mek.key } });
+                    reply('❗ An error occurred while processing your download request.');
                 }
-            });
-        });
+            };
+
+            conn.ev.on('messages.upsert', handleDownloadReply);
+            setTimeout(() => conn.ev.off('messages.upsert', handleDownloadReply), 60000);
+        };
+
+        conn.ev.on('messages.upsert', handleNumberReply);
+        setTimeout(() => conn.ev.off('messages.upsert', handleNumberReply), 60000);
 
     } catch (err) {
         console.error(err);
+        await conn.sendMessage(from, { react: { text: '❌', key: mek.key } });
         reply('❗ Error: ' + err.message);
     }
 });
