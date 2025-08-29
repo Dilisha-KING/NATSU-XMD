@@ -5,7 +5,7 @@ cmd({
   pattern: "tvshow",
   alias: ["tv", "series"],
   react: "📺",
-  desc: "Search TV shows with Sinhala subtitles, get info & download links",
+  desc: "Search TV shows with Sinhala subtitles, get info & download links (multi-episode)",
   category: "entertainment",
   filename: __filename
 }, async (client, message, match, { from }) => {
@@ -18,9 +18,9 @@ cmd({
 
     const query = encodeURIComponent(match);
 
-    // Search API
+    // ===== Search API =====
     const searchRes = await axios.get(`https://supun-md-mv.vercel.app/api/sinhalasub-tvshow2/search?q=${query}`);
-    const shows = searchRes.data;
+    const shows = searchRes.data.results; // results array
 
     if (!shows || shows.length === 0) {
       return await client.sendMessage(from, {
@@ -32,21 +32,30 @@ cmd({
     const show = shows[0];
     const showUrl = encodeURIComponent(show.url);
 
-    // Show Info API
+    // ===== Info API =====
     const infoRes = await axios.get(`https://supun-md-mv.vercel.app/api/sinhalasub-tvshow2/info?url=${showUrl}`);
     const info = infoRes.data;
 
-    // Download Links API
+    // ===== Download API =====
     const dlRes = await axios.get(`https://supun-md-mv.vercel.app/api/sinhalasub-tvshow2/dl?url=${showUrl}`);
-    const downloadLinks = dlRes.data;
+    const downloadLinks = dlRes.data.links || []; // ensure array exists
 
+    // Prepare episode-wise list
+    let episodeText = "N/A";
+    if (downloadLinks.length > 0) {
+      episodeText = downloadLinks.map((ep, index) => {
+        return `🎬 Episode ${index + 1}: ${ep}`;
+      }).join("\n");
+    }
+
+    // Prepare response
     const responseText = `
-📺 *Title:* ${info.title}
+📺 *Title:* ${info.title || "N/A"}
 📝 *Description:* ${info.description || "N/A"}
-📅 *Year:* ${info.year}
-🎞️ *Language:* ${info.language}
+📅 *Year:* ${info.year || "N/A"}
+🎞️ *Language:* ${info.language || "N/A"}
 🔗 *Download Links:*
-${downloadLinks.map((link, index) => `${index + 1}. ${link}`).join("\n")}
+${episodeText}
 `;
 
     await client.sendMessage(from, { text: responseText }, { quoted: message });
