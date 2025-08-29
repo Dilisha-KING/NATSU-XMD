@@ -20,7 +20,7 @@ cmd({
 
     // ===== Search API =====
     const searchRes = await axios.get(`https://supun-md-mv.vercel.app/api/sinhalasub-tvshow2/search?q=${query}`);
-    const shows = searchRes.data.results; // results array
+    const shows = searchRes.data.data; // ✅ use 'data' field
 
     if (!shows || shows.length === 0) {
       return await client.sendMessage(from, {
@@ -43,9 +43,7 @@ cmd({
     // Prepare episode-wise list
     let episodeText = "N/A";
     if (downloadLinks.length > 0) {
-      episodeText = downloadLinks.map((ep, index) => {
-        return `🎬 Episode ${index + 1}: ${ep}`;
-      }).join("\n");
+      episodeText = downloadLinks.map((ep, index) => `🎬 Episode ${index + 1}: ${ep}`).join("\n");
     }
 
     // Prepare response
