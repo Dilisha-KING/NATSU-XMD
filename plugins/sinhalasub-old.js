@@ -1,89 +1,60 @@
-const axios = require('axios');
-const { cmd } = require('../command');
-
-let movieSelections = {}; // selections cache
+const { cmd } = require("../command");
+const axios = require("axios");
 
 cmd({
-    pattern: "movie",
-    desc: "Fetch multiple movies from IMDb and download links",
-    category: "utility",
-    react: "🎬",
-    filename: __filename
-},
-async (conn, mek, m, { from, reply, args }) => {
-    try {
-        const movieName = args.length > 0 ? args.join(' ') : m.text.replace(/^[\.\#\$\!]?movie\s?/i, '').trim();
-        
-        if (!movieName) {
-            return reply("📽️ Please provide the name of the movie.\nExample: .movie Iron Man");
-        }
-
-        const apiUrl = `https://supun-md-api-xmjh.vercel.app/api/zoom-search?q=${encodeURIComponent(movieName)}`;
-        const response = await axios.get(apiUrl);
-
-        if (!response.data.status || !response.data.results || response.data.results.length === 0) {
-            return reply("🚫 Movie not found. Please check the name and try again.");
-        }
-
-        const movies = response.data.results.slice(0, 8);
-        let listText = `🎬 *Movies Found for:* ${movieName}\n\n`;
-        movies.forEach((mv, i) => {
-            listText += `${i + 1}. ${mv.title} (${mv.year})\n`;
-        });
-        listText += `\n👉 Reply with numbers (ex: 1,3,5) to get details & download links`;
-
-        movieSelections[from] = movies; // save user’s movie list
-        await reply(listText);
-
-    } catch (e) {
-        console.error('Movie command error:', e);
-        reply(`❌ Error: ${e.message}`);
+  pattern: "tvshow",
+  alias: ["tv", "series"],
+  react: "📺",
+  desc: "Search TV shows with Sinhala subtitles, get info & download links",
+  category: "entertainment",
+  filename: __filename
+}, async (client, message, match, { from }) => {
+  try {
+    if (!match) {
+      return await client.sendMessage(from, {
+        text: "*🍁 Please provide a TV show name!*"
+      }, { quoted: message });
     }
-});
 
-// Listen for replies
-cmd({
-    on: "text"  // global listener
-}, async (conn, mek, m, { from, reply, body }) => {
-    try {
-        if (!movieSelections[from]) return; // no movie list waiting
+    const query = encodeURIComponent(match);
 
-        const selections = body.split(",").map(n => parseInt(n.trim())).filter(n => !isNaN(n));
-        if (selections.length === 0) return;
+    // Search API
+    const searchRes = await axios.get(`https://supun-md-mv.vercel.app/api/sinhalasub-tvshow2/search?q=${query}`);
+    const shows = searchRes.data;
 
-        const movies = movieSelections[from];
-        delete movieSelections[from]; // clear after use
+    if (!shows || shows.length === 0) {
+      return await client.sendMessage(from, {
+        text: "❌ No TV shows found for your query."
+      }, { quoted: message });
+    }
 
-        for (let n of selections) {
-            const movie = movies[n - 1];
-            if (!movie) continue;
+    // Take first result
+    const show = shows[0];
+    const showUrl = encodeURIComponent(show.url);
 
-            const infoUrl = `https://supun-md-api-xmjh.vercel.app/api/zoom-dl?url=${encodeURIComponent(movie.title)}`;
-            const infoRes = await axios.get(infoUrl);
-            const mv = infoRes.data.movie;
+    // Show Info API
+    const infoRes = await axios.get(`https://supun-md-mv.vercel.app/api/sinhalasub-tvshow2/info?url=${showUrl}`);
+    const info = infoRes.data;
 
-            const caption = `
-🎬 *${mv.title}* (${mv.year})
+    // Download Links API
+    const dlRes = await axios.get(`https://supun-md-mv.vercel.app/api/sinhalasub-tvshow2/dl?url=${showUrl}`);
+    const downloadLinks = dlRes.data;
 
-⭐ *IMDB:* ${mv.imdbRating || 'N/A'}
-📅 *Released:* ${mv.released}
-⏳ *Runtime:* ${mv.runtime}
-🎭 *Genre:* ${mv.genres}
-📝 *Plot:* ${mv.plot}
-
-🎥 *Director:* ${mv.director}
-🌟 *Actors:* ${mv.actors}
-
-🔗 *Download:* https://archive.org/download/${encodeURIComponent(mv.title.replace(/\s+/g, "_"))}.mp4
-[IMDB Link](${mv.imdbUrl})
+    const responseText = `
+📺 *Title:* ${info.title}
+📝 *Description:* ${info.description || "N/A"}
+📅 *Year:* ${info.year}
+🎞️ *Language:* ${info.language}
+🔗 *Download Links:*
+${downloadLinks.map((link, index) => `${index + 1}. ${link}`).join("\n")}
 `;
 
-            await conn.sendMessage(from, {
-                image: { url: mv.poster && mv.poster !== 'N/A' ? mv.poster : 'https://files.catbox.moe/m5drmn.png' },
-                caption,
-            }, { quoted: mek });
-        }
-    } catch (err) {
-        console.error("Reply handler error:", err);
-    }
+    await client.sendMessage(from, { text: responseText }, { quoted: message });
+
+  } catch (error) {
+    console.error("SinhalaSub TV Show Plugin Error:", error);
+    await client.sendMessage(from, {
+      text: "❌ Error fetching TV show info:\n" + error.message
+    }, { quoted: message });
+  }
 });
