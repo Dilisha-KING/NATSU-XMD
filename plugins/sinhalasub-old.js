@@ -1,67 +1,48 @@
-const { cmd } = require("../command");
-const axios = require("axios");
+const { cmd } = require('../command')
+const axios = require('axios')
 
 cmd({
-  pattern: "tvshow",
-  alias: ["tv", "series"],
-  react: "📺",
-  desc: "Search TV shows with Sinhala subtitles, get info & download links (multi-episode)",
-  category: "entertainment",
-  filename: __filename
-}, async (client, message, match, { from }) => {
-  try {
-    if (!match) {
-      return await client.sendMessage(from, {
-        text: "*🍁 Please provide a TV show name!*"
-      }, { quoted: message });
+    pattern: 'cinesubz',
+    desc: 'Search Cinesubz movies and get info + download links',
+    category: 'movie',
+    react: '🎬',
+    filename: __filename
+}, async (conn, mek, m, { text }) => {
+    try {
+        if (!text) return await m.reply("🔎 *Please provide a movie name!*\n\nExample: .cinesubz Avatar")
+
+        const apiKey = "f5b42f3c-5d21-44ac-a976-6b0589c3877c"
+        const searchUrl = `https://api.cinesubz.net/search?query=${encodeURIComponent(text)}&apikey=${apiKey}`
+
+        const { data } = await axios.get(searchUrl)
+
+        if (!data || data.length === 0) {
+            return await m.reply("❌ No movies found for your query!")
+        }
+
+        let movie = data[0] // first result
+        let detailsUrl = `https://api.cinesubz.net/movie/${movie.id}?apikey=${apiKey}`
+
+        const { data: details } = await axios.get(detailsUrl)
+
+        let msg = `🎬 *${details.title}*\n\n`
+        msg += `📅 Year: ${details.year || 'N/A'}\n`
+        msg += `⭐ Rating: ${details.rating || 'N/A'}\n`
+        msg += `🗂 Genre: ${details.genres ? details.genres.join(', ') : 'N/A'}\n\n`
+        msg += `📝 Plot: ${details.plot || 'No description available'}\n\n`
+        msg += `⬇️ *Download Links:*\n`
+
+        if (details.downloads && details.downloads.length > 0) {
+            details.downloads.forEach(dl => {
+                msg += `- ${dl.quality} : ${dl.url}\n`
+            })
+        } else {
+            msg += "❌ No download links available"
+        }
+
+        await conn.sendMessage(m.chat, { image: { url: details.poster }, caption: msg }, { quoted: mek })
+    } catch (e) {
+        console.error(e)
+        await m.reply("⚠️ Error fetching movie info, try again later.")
     }
-
-    const query = encodeURIComponent(match);
-
-    // ===== Search API =====
-    const searchRes = await axios.get(`https://supun-md-mv.vercel.app/api/sinhalasub-tvshow2/search?q=${query}`);
-    const shows = searchRes.data.data; // ✅ use 'data' field
-
-    if (!shows || shows.length === 0) {
-      return await client.sendMessage(from, {
-        text: "❌ No TV shows found for your query."
-      }, { quoted: message });
-    }
-
-    // Take first result
-    const show = shows[0];
-    const showUrl = encodeURIComponent(show.url);
-
-    // ===== Info API =====
-    const infoRes = await axios.get(`https://supun-md-mv.vercel.app/api/sinhalasub-tvshow2/info?url=${showUrl}`);
-    const info = infoRes.data;
-
-    // ===== Download API =====
-    const dlRes = await axios.get(`https://supun-md-mv.vercel.app/api/sinhalasub-tvshow2/dl?url=${showUrl}`);
-    const downloadLinks = dlRes.data.links || []; // ensure array exists
-
-    // Prepare episode-wise list
-    let episodeText = "N/A";
-    if (downloadLinks.length > 0) {
-      episodeText = downloadLinks.map((ep, index) => `🎬 Episode ${index + 1}: ${ep}`).join("\n");
-    }
-
-    // Prepare response
-    const responseText = `
-📺 *Title:* ${info.title || "N/A"}
-📝 *Description:* ${info.description || "N/A"}
-📅 *Year:* ${info.year || "N/A"}
-🎞️ *Language:* ${info.language || "N/A"}
-🔗 *Download Links:*
-${episodeText}
-`;
-
-    await client.sendMessage(from, { text: responseText }, { quoted: message });
-
-  } catch (error) {
-    console.error("SinhalaSub TV Show Plugin Error:", error);
-    await client.sendMessage(from, {
-      text: "❌ Error fetching TV show info:\n" + error.message
-    }, { quoted: message });
-  }
-});
+})
